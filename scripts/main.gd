@@ -54,6 +54,9 @@ const TREE_STUMP_CENTER_Y := 0.14
 ## Same X as Tree_8 at (0,0,20); dog slightly toward camera so trunk sits between cam and dog.
 const DEBUG_OCCLUSION_TEST_POS := Vector3(0.0, 0.0, 17.35)
 const PUNCH_RADIUS_UV := 0.11
+## Billboard dog is wider than one trunk ray; sample laterally + vertically so outline matches visible overlap.
+const OCCLUSION_LATERAL_OFFSET := 0.34
+const OCCLUSION_EXTRA_HEIGHT_FRAC := 0.55
 
 @onready var dog_anchor: CharacterBody3D = $DogAnchor
 @onready var dog_sprite: Sprite3D = $DogAnchor/DogSprite
@@ -166,24 +169,45 @@ func _dog_ray_origin() -> Vector3:
 	return dog_anchor.global_position + Vector3(0.0, half_h, 0.0)
 
 
-func _update_occlusion_debug() -> void:
-	var cam_from: Vector3 = follow_camera.global_position
-	var cam_to: Vector3 = _dog_ray_origin()
+func _dog_occlusion_sample_points() -> Array[Vector3]:
+	var half_h: float = _sprite_world_half_height(_dog_texture, DOG_PIXEL_SIZE)
+	var base: Vector3 = dog_anchor.global_position
+	var ry: float = dog_anchor.global_rotation.y
+	var forward := Vector3(sin(ry), 0.0, cos(ry))
+	var right := Vector3.UP.cross(forward)
+	var heights: Array[float] = [half_h, half_h * (1.0 + OCCLUSION_EXTRA_HEIGHT_FRAC)]
+	var laterals: Array[float] = [0.0, -OCCLUSION_LATERAL_OFFSET, OCCLUSION_LATERAL_OFFSET]
+	var out: Array[Vector3] = []
+	for h in heights:
+		for lat in laterals:
+			out.append(base + Vector3(0.0, h, 0.0) + right * lat)
+	return out
+
+
+func _ray_hits_tree_layer(from: Vector3, to: Vector3) -> bool:
 	var space := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(cam_from, cam_to)
+	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
 	query.collision_mask = TREE_PHYSICS_LAYER
+	return not space.intersect_ray(query).is_empty()
 
-	var hit := space.intersect_ray(query)
-	_dog_occluded = not hit.is_empty()
+
+func _update_occlusion_debug() -> void:
+	var cam_from: Vector3 = follow_camera.global_position
+	var punch_anchor: Vector3 = _dog_ray_origin()
+	_dog_occluded = false
+	for sample in _dog_occlusion_sample_points():
+		if _ray_hits_tree_layer(cam_from, sample):
+			_dog_occluded = true
+			break
 
 	var punch_on: bool = _debug_punch and _dog_occluded
 	_tree_punch_material.set_shader_parameter("punch_enabled", punch_on)
 	if punch_on:
 		var vp_size: Vector2 = get_viewport().get_visible_rect().size
 		if vp_size.x > 0.0 and vp_size.y > 0.0:
-			var screen_px: Vector2 = follow_camera.unproject_position(cam_to)
+			var screen_px: Vector2 = follow_camera.unproject_position(punch_anchor)
 			var uv := Vector2(
 				screen_px.x / vp_size.x,
 				1.0 - (screen_px.y / vp_size.y)
