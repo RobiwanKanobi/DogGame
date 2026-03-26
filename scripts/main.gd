@@ -1,6 +1,28 @@
 extends Node3D
 
 const DOG_TEXTURE_PATH := "res://assets/dog.png"
+const COMPANION_TEXTURE_PATHS: Array[String] = [
+	"res://assets/dog2.png",
+	"res://assets/dog3.png",
+]
+const COMPANION_DOG_SCRIPT := preload("res://scripts/companion_dog.gd")
+const RECRUIT_DISTANCE := 2.8
+const COMPANION_MIN_TREE_DIST := 4.5
+const COMPANION_MIN_START_DIST := 6.0
+const COMPANION_MIN_SEPARATION := 5.0
+
+const TREE_WORLD_POSITIONS: Array[Vector3] = [
+	Vector3(-16.0, 0.0, -10.0),
+	Vector3(-12.0, 0.0, 6.0),
+	Vector3(-6.0, 0.0, 16.0),
+	Vector3(4.0, 0.0, -15.0),
+	Vector3(9.0, 0.0, 13.0),
+	Vector3(16.0, 0.0, -6.0),
+	Vector3(19.0, 0.0, 7.0),
+	Vector3(-20.0, 0.0, 2.0),
+	Vector3(0.0, 0.0, 20.0),
+	Vector3(22.0, 0.0, 20.0),
+]
 const TREE_TEXTURE_PATH := "res://assets/tree.png"
 const DEBUG_MENU_SCENE := preload("res://scenes/debug_menu.tscn")
 const TREE_OCCLUSION_SHADER := preload("res://shaders/tree_occlusion_punch.gdshader")
@@ -45,6 +67,8 @@ var _debug_outline := false
 var _debug_xray := false
 var _debug_punch := false
 var _dog_occluded := false
+var _companions: Array[Node] = []
+var _companion_rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
@@ -60,6 +84,7 @@ func _ready() -> void:
 	_build_ground()
 	_build_trees()
 	_setup_dog()
+	_spawn_companion_dogs()
 	_setup_camera()
 	_setup_debug_menu()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
@@ -75,6 +100,7 @@ func _input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	_time += delta
 	_update_movement(delta)
+	_try_recruit_companions()
 	_update_camera(delta)
 	_update_cardboard_fx()
 	_update_occlusion_debug()
@@ -171,23 +197,10 @@ func _build_ground() -> void:
 
 
 func _build_trees() -> void:
-	var positions := [
-		Vector3(-16.0, 0.0, -10.0),
-		Vector3(-12.0, 0.0, 6.0),
-		Vector3(-6.0, 0.0, 16.0),
-		Vector3(4.0, 0.0, -15.0),
-		Vector3(9.0, 0.0, 13.0),
-		Vector3(16.0, 0.0, -6.0),
-		Vector3(19.0, 0.0, 7.0),
-		Vector3(-20.0, 0.0, 2.0),
-		Vector3(0.0, 0.0, 20.0),
-		Vector3(22.0, 0.0, 20.0),
-	]
-
-	for index in positions.size():
+	for index in TREE_WORLD_POSITIONS.size():
 		var tree_root := Node3D.new()
 		tree_root.name = "Tree_%d" % index
-		tree_root.position = positions[index]
+		tree_root.position = TREE_WORLD_POSITIONS[index]
 		add_child(tree_root)
 
 		var sprite := Sprite3D.new()
@@ -254,6 +267,83 @@ func _setup_dog() -> void:
 	_dog_outline_sprite.visible = false
 	dog_anchor.add_child(_dog_outline_sprite)
 	dog_anchor.move_child(_dog_outline_sprite, 0)
+
+
+func _spawn_companion_dogs() -> void:
+	_companion_rng.randomize()
+	var spawn_points: Array[Vector3] = []
+	var next_slot := 0
+
+	for path in COMPANION_TEXTURE_PATHS:
+		var tex: Texture2D = null
+		if ResourceLoader.exists(path):
+			tex = load(path) as Texture2D
+		if tex == null:
+			tex = _dog_texture
+
+		var pos := _random_companion_spawn(spawn_points)
+		spawn_points.append(pos)
+
+		var companion := Node3D.new()
+		companion.set_script(COMPANION_DOG_SCRIPT)
+		companion.name = "CompanionDog_%d" % next_slot
+		add_child(companion)
+		companion.call(
+			"setup",
+			tex,
+			DOG_PIXEL_SIZE,
+			Vector2(0.0, -110.0),
+			pos,
+			_companion_rng.randf() * TAU
+		)
+		_companions.append(companion)
+		next_slot += 1
+
+
+func _random_companion_spawn(existing: Array[Vector3]) -> Vector3:
+	var margin := 3.0
+	var min_c := -WORLD_RADIUS + margin
+	var max_c := WORLD_RADIUS - margin
+	for attempt in 48:
+		var x := _companion_rng.randf_range(min_c, max_c)
+		var z := _companion_rng.randf_range(min_c, max_c)
+		var candidate := Vector3(x, 0.0, z)
+		if candidate.distance_to(dog_anchor.position) < COMPANION_MIN_START_DIST:
+			continue
+		if not _is_clear_of_trees(candidate, COMPANION_MIN_TREE_DIST):
+			continue
+		var ok := true
+		for p in existing:
+			if candidate.distance_to(p) < COMPANION_MIN_SEPARATION:
+				ok = false
+				break
+		if ok:
+			return candidate
+	return Vector3(10.0, 0.0, -8.0)
+
+
+func _is_clear_of_trees(p: Vector3, min_dist: float) -> bool:
+	for tp in TREE_WORLD_POSITIONS:
+		var flat := Vector3(tp.x, 0.0, tp.z)
+		if p.distance_to(flat) < min_dist:
+			return false
+	return true
+
+
+var _next_follower_slot := 0
+
+
+func _try_recruit_companions() -> void:
+	for c in _companions:
+		if c == null:
+			continue
+		if not c.has_method("is_joined") or not c.has_method("join"):
+			continue
+		if c.call("is_joined"):
+			continue
+		if dog_anchor.position.distance_to(c.position) <= RECRUIT_DISTANCE:
+			c.call("join", dog_anchor, dog_sprite, _next_follower_slot)
+			_next_follower_slot += 1
 
 
 func _setup_camera() -> void:
