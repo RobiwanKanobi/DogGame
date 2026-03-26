@@ -12,7 +12,7 @@ void vertex() {
 	vec3 cam_forward = normalize(cross(cam_right, vec3(0.0, 1.0, 0.0)));
 	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
 			vec4(cam_right, 0.0),
-			vec4(0.0, 1.0, 0.0),
+			vec4(0.0, 1.0, 0.0, 0.0),
 			vec4(cam_forward, 0.0),
 			MODEL_MATRIX[3]);
 }
