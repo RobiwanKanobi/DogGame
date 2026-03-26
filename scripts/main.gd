@@ -11,6 +11,12 @@ const MOVE_SPEED := 8.0
 const TURN_SPEED := 10.0
 const WORLD_RADIUS := 24.0
 
+const DOG_PIXEL_SIZE := 0.0035
+const TREE_PIXEL_SIZE := 0.018
+const CENTER_LIGHT_HEIGHT := 8.0
+const CENTER_LIGHT_ENERGY := 4.0
+const CENTER_LIGHT_RANGE := 45.0
+
 @onready var dog_anchor: Node3D = $DogAnchor
 @onready var dog_sprite: Sprite3D = $DogAnchor/DogSprite
 @onready var camera_rig: Node3D = $CameraRig
@@ -70,7 +76,8 @@ func _update_camera(delta: float) -> void:
 
 func _update_cardboard_fx() -> void:
 	var speed_ratio: float = clampf(_velocity.length() / MOVE_SPEED, 0.0, 1.0)
-	dog_sprite.position.y = 1.9 + sin(_time * 10.0) * 0.06 * speed_ratio
+	var dog_foot_y: float = _sprite_world_half_height(_dog_texture, DOG_PIXEL_SIZE)
+	dog_sprite.position.y = dog_foot_y + sin(_time * 10.0) * 0.06 * speed_ratio
 	dog_sprite.rotation.z = sin(_time * 8.0) * 0.03 * speed_ratio
 
 
@@ -111,9 +118,10 @@ func _build_trees() -> void:
 		sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 		sprite.double_sided = false
 		sprite.no_depth_test = false
-		sprite.pixel_size = 0.009
+		sprite.pixel_size = TREE_PIXEL_SIZE
 		sprite.offset = Vector2(0.0, -225.0)
 		sprite.modulate = Color(0.96, 0.93, 0.88)
+		sprite.position.y = _sprite_world_half_height(_tree_texture, TREE_PIXEL_SIZE)
 		tree_root.add_child(sprite)
 
 		var base := MeshInstance3D.new()
@@ -132,9 +140,10 @@ func _setup_dog() -> void:
 	dog_sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	dog_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	dog_sprite.double_sided = false
-	dog_sprite.pixel_size = 0.007
+	dog_sprite.pixel_size = DOG_PIXEL_SIZE
 	dog_sprite.offset = Vector2(0.0, -110.0)
 	dog_sprite.shaded = true
+	dog_sprite.position.y = _sprite_world_half_height(_dog_texture, DOG_PIXEL_SIZE)
 
 
 func _setup_camera() -> void:
@@ -145,10 +154,18 @@ func _setup_camera() -> void:
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52.0, -36.0, 0.0)
-	sun.light_energy = 1.35
+	sun.light_energy = 1.35 * 0.3
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 80.0
 	add_child(sun)
+
+	var center_light := OmniLight3D.new()
+	center_light.position = Vector3(0.0, CENTER_LIGHT_HEIGHT, 0.0)
+	center_light.light_energy = CENTER_LIGHT_ENERGY
+	center_light.omni_range = CENTER_LIGHT_RANGE
+	center_light.omni_attenuation = 0.8
+	center_light.shadow_enabled = false
+	camera_rig.add_child(center_light)
 
 	var fill := WorldEnvironment.new()
 	var environment := Environment.new()
@@ -165,7 +182,7 @@ func _setup_camera() -> void:
 
 func _make_ground_material() -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.29, 0.37, 0.23)
+	material.albedo_color = Color(0.22, 0.12, 0.06)
 	material.roughness = 1.0
 	material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	return material
@@ -198,6 +215,12 @@ func _add_key_binding(action_name: StringName, keycodes: Array[int]) -> void:
 		event.keycode = keycode
 		event.physical_keycode = keycode
 		InputMap.action_add_event(action_name, event)
+
+
+func _sprite_world_half_height(texture: Texture2D, pixel_size: float) -> float:
+	if texture == null:
+		return 0.0
+	return float(texture.get_height()) * pixel_size * 0.5
 
 
 func _action_has_key(action_name: StringName, keycode: int) -> bool:
