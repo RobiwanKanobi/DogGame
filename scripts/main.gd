@@ -2,6 +2,10 @@ extends Node3D
 
 const DOG_TEXTURE_PATH := "res://assets/dog.png"
 const TREE_TEXTURE_PATH := "res://assets/tree.png"
+const DEBUG_MENU_SCENE := preload("res://scenes/debug_menu.tscn")
+const TREE_OCCLUSION_SHADER := preload("res://shaders/tree_occlusion_punch.gdshader")
+const DOG_OUTLINE_SHADER := preload("res://shaders/dog_occlusion_outline.gdshader")
+
 const ACTION_MOVE_LEFT := "move_left"
 const ACTION_MOVE_RIGHT := "move_right"
 const ACTION_MOVE_FORWARD := "move_forward"
@@ -17,6 +21,12 @@ const CENTER_LIGHT_HEIGHT := 8.0
 const CENTER_LIGHT_ENERGY := 4.0
 const CENTER_LIGHT_RANGE := 45.0
 
+const TREE_PHYSICS_LAYER := 2
+const TREE_CAPSULE_RADIUS := 1.15
+const TREE_CAPSULE_HEIGHT := 26.0
+const TREE_CAPSULE_CENTER_Y := 13.0
+const PUNCH_RADIUS_UV := 0.11
+
 @onready var dog_anchor: Node3D = $DogAnchor
 @onready var dog_sprite: Sprite3D = $DogAnchor/DogSprite
 @onready var camera_rig: Node3D = $CameraRig
@@ -27,22 +37,47 @@ var _time := 0.0
 var _dog_texture: Texture2D
 var _tree_texture: Texture2D
 
+var _tree_punch_material: ShaderMaterial
+var _dog_outline_sprite: Sprite3D
+var _debug_menu: CanvasLayer
+
+var _debug_outline := false
+var _debug_xray := false
+var _debug_punch := false
+var _dog_occluded := false
+
 
 func _ready() -> void:
 	_configure_input()
 	_dog_texture = load(DOG_TEXTURE_PATH) as Texture2D
 	_tree_texture = load(TREE_TEXTURE_PATH) as Texture2D
+	_tree_punch_material = ShaderMaterial.new()
+	_tree_punch_material.shader = TREE_OCCLUSION_SHADER
+	_tree_punch_material.set_shader_parameter("albedo_tex", _tree_texture)
+	_tree_punch_material.set_shader_parameter("modulate_color", Color(0.96, 0.93, 0.88))
+	_tree_punch_material.set_shader_parameter("punch_enabled", false)
+	_tree_punch_material.set_shader_parameter("punch_radius_uv", PUNCH_RADIUS_UV)
 	_build_ground()
 	_build_trees()
 	_setup_dog()
 	_setup_camera()
+	_setup_debug_menu()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_TAB:
+			_debug_menu.toggle_visible()
+			get_viewport().set_input_as_handled()
+
 
 func _physics_process(delta: float) -> void:
 	_time += delta
 	_update_movement(delta)
 	_update_camera(delta)
 	_update_cardboard_fx()
+	_update_occlusion_debug()
 
 
 func _update_movement(delta: float) -> void:
@@ -77,8 +112,51 @@ func _update_camera(delta: float) -> void:
 func _update_cardboard_fx() -> void:
 	var speed_ratio: float = clampf(_velocity.length() / MOVE_SPEED, 0.0, 1.0)
 	var dog_foot_y: float = _sprite_world_half_height(_dog_texture, DOG_PIXEL_SIZE)
-	dog_sprite.position.y = dog_foot_y + sin(_time * 10.0) * 0.06 * speed_ratio
-	dog_sprite.rotation.z = sin(_time * 8.0) * 0.03 * speed_ratio
+	var bob := sin(_time * 10.0) * 0.06 * speed_ratio
+	var tilt := sin(_time * 8.0) * 0.03 * speed_ratio
+	dog_sprite.position.y = dog_foot_y + bob
+	dog_sprite.rotation.z = tilt
+	_dog_outline_sprite.position = dog_sprite.position
+	_dog_outline_sprite.rotation.z = dog_sprite.rotation.z
+	_dog_outline_sprite.flip_h = dog_sprite.flip_h
+
+
+func _dog_ray_origin() -> Vector3:
+	var half_h: float = _sprite_world_half_height(_dog_texture, DOG_PIXEL_SIZE)
+	return dog_anchor.global_position + Vector3(0.0, half_h, 0.0)
+
+
+func _update_occlusion_debug() -> void:
+	var cam_from: Vector3 = follow_camera.global_position
+	var cam_to: Vector3 = _dog_ray_origin()
+	var space := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(cam_from, cam_to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.collision_mask = TREE_PHYSICS_LAYER
+
+	var hit := space.intersect_ray(query)
+	_dog_occluded = not hit.is_empty()
+
+	var punch_on: bool = _debug_punch and _dog_occluded
+	_tree_punch_material.set_shader_parameter("punch_enabled", punch_on)
+	if punch_on:
+		var vp_size: Vector2 = get_viewport().get_visible_rect().size
+		if vp_size.x > 0.0 and vp_size.y > 0.0:
+			var screen_px: Vector2 = follow_camera.unproject_position(cam_to)
+			var uv := Vector2(
+				screen_px.x / vp_size.x,
+				1.0 - (screen_px.y / vp_size.y)
+			)
+			_tree_punch_material.set_shader_parameter("punch_center_uv", uv)
+
+	if _debug_xray and _dog_occluded:
+		dog_sprite.no_depth_test = true
+	else:
+		dog_sprite.no_depth_test = false
+
+	var show_outline: bool = _debug_outline and _dog_occluded and not (_debug_xray and _dog_occluded)
+	_dog_outline_sprite.visible = show_outline
 
 
 func _build_ground() -> void:
@@ -115,14 +193,28 @@ func _build_trees() -> void:
 		var sprite := Sprite3D.new()
 		sprite.texture = _tree_texture
 		sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-		sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+		sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 		sprite.double_sided = false
 		sprite.no_depth_test = false
 		sprite.pixel_size = TREE_PIXEL_SIZE
 		sprite.offset = Vector2(0.0, -225.0)
 		sprite.modulate = Color(0.96, 0.93, 0.88)
 		sprite.position.y = _sprite_world_half_height(_tree_texture, TREE_PIXEL_SIZE)
+		sprite.material_override = _tree_punch_material
 		tree_root.add_child(sprite)
+
+		var body := StaticBody3D.new()
+		body.collision_layer = TREE_PHYSICS_LAYER
+		body.collision_mask = 0
+		body.position = Vector3(0.0, TREE_CAPSULE_CENTER_Y, 0.0)
+		tree_root.add_child(body)
+
+		var shape := CollisionShape3D.new()
+		var capsule := CapsuleShape3D.new()
+		capsule.radius = TREE_CAPSULE_RADIUS
+		capsule.height = TREE_CAPSULE_HEIGHT
+		shape.shape = capsule
+		body.add_child(shape)
 
 		var base := MeshInstance3D.new()
 		var cylinder := CylinderMesh.new()
@@ -144,6 +236,24 @@ func _setup_dog() -> void:
 	dog_sprite.offset = Vector2(0.0, -110.0)
 	dog_sprite.shaded = true
 	dog_sprite.position.y = _sprite_world_half_height(_dog_texture, DOG_PIXEL_SIZE)
+
+	_dog_outline_sprite = Sprite3D.new()
+	_dog_outline_sprite.name = "DogOutline"
+	_dog_outline_sprite.texture = _dog_texture
+	_dog_outline_sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	_dog_outline_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	_dog_outline_sprite.double_sided = false
+	_dog_outline_sprite.pixel_size = DOG_PIXEL_SIZE
+	_dog_outline_sprite.offset = Vector2(0.0, -110.0)
+	_dog_outline_sprite.shaded = false
+	_dog_outline_sprite.position = dog_sprite.position
+	var outline_mat := ShaderMaterial.new()
+	outline_mat.shader = DOG_OUTLINE_SHADER
+	outline_mat.set_shader_parameter("albedo_tex", _dog_texture)
+	_dog_outline_sprite.material_override = outline_mat
+	_dog_outline_sprite.visible = false
+	dog_anchor.add_child(_dog_outline_sprite)
+	dog_anchor.move_child(_dog_outline_sprite, 0)
 
 
 func _setup_camera() -> void:
@@ -178,6 +288,28 @@ func _setup_camera() -> void:
 	environment.glow_bloom = 0.15
 	fill.environment = environment
 	add_child(fill)
+
+
+func _setup_debug_menu() -> void:
+	_debug_menu = DEBUG_MENU_SCENE.instantiate() as CanvasLayer
+	add_child(_debug_menu)
+	_debug_menu.outline_toggled.connect(_on_debug_outline_toggled)
+	_debug_menu.xray_toggled.connect(_on_debug_xray_toggled)
+	_debug_menu.punch_toggled.connect(_on_debug_punch_toggled)
+
+
+func _on_debug_outline_toggled(on: bool) -> void:
+	_debug_outline = on
+
+
+func _on_debug_xray_toggled(on: bool) -> void:
+	_debug_xray = on
+
+
+func _on_debug_punch_toggled(on: bool) -> void:
+	_debug_punch = on
+	if not on:
+		_tree_punch_material.set_shader_parameter("punch_enabled", false)
 
 
 func _make_ground_material() -> StandardMaterial3D:

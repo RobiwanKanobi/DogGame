@@ -1,0 +1,62 @@
+[gd_scene load_steps=2 format=3 uid="uid://cdebugmenu001"]
+
+[ext_resource type="Script" path="res://scripts/debug_menu.gd" id="1_dbg"]
+
+[node name="DebugMenu" type="CanvasLayer"]
+script = ExtResource("1_dbg")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="Panel" parent="Root"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 0.0
+anchor_bottom = 0.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 312.0
+offset_bottom = 200.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="Root/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="Root/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Debug (TAB to close)"
+horizontal_alignment = 1
+
+[node name="OutlineCheck" type="CheckBox" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Outline when occluded"
+
+[node name="XRayCheck" type="CheckBox" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+text = "X-ray when occluded"
+
+[node name="PunchCheck" type="CheckBox" parent="Root/Panel/Margin/VBox"]
+layout_mode = 2
+text = "Screen circle punch (tree)"
