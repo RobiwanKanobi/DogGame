@@ -31,8 +31,8 @@ func setup(
 	_texture = texture
 	_pixel_size = pixel_size
 	_time_offset = bob_time_offset
-	position = spawn_position
-	position.y = 0.0
+	global_position = spawn_position
+	global_position.y = 0.0
 
 	_sprite = Sprite3D.new()
 	_sprite.texture = texture
@@ -68,30 +68,34 @@ func _physics_process(delta: float) -> void:
 	if not _joined or _leader == null:
 		return
 
-	var forward := Vector3(sin(_leader.rotation.y), 0.0, cos(_leader.rotation.y))
+	var leader_y: float = _leader.global_rotation.y
+	var forward := Vector3(sin(leader_y), 0.0, cos(leader_y))
 	var right := Vector3.UP.cross(forward)
 	var back_dist := FOLLOW_BASE + float(_slot_index) * SLOT_SPACING
 	var side_sign := 1.0 if (_slot_index % 2) == 0 else -1.0
 	var side := side_sign * LATERAL_STAGGER * (1.0 + 0.35 * float(_slot_index))
-	var target := _leader.position - forward * back_dist + right * side
+	var target := _leader.global_position - forward * back_dist + right * side
 	target.y = 0.0
 
-	var to_target := target - position
+	var to_target := target - global_position
 	var dist := to_target.length()
 	var dir := Vector3.ZERO
 	if dist > 0.001:
 		dir = to_target / dist
 		var speed := minf(MOVE_SPEED * 1.08, dist * CATCHUP_SPEED)
-		position += dir * speed * delta
+		global_position += dir * speed * delta
 
-	position.x = clampf(position.x, -WORLD_RADIUS, WORLD_RADIUS)
-	position.z = clampf(position.z, -WORLD_RADIUS, WORLD_RADIUS)
+	var g := global_position
+	g.x = clampf(g.x, -WORLD_RADIUS, WORLD_RADIUS)
+	g.z = clampf(g.z, -WORLD_RADIUS, WORLD_RADIUS)
+	g.y = 0.0
+	global_position = g
 
 	if dist > 0.25:
-		rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), ALIGN_TURN * delta)
+		global_rotation.y = lerp_angle(global_rotation.y, atan2(dir.x, dir.z), ALIGN_TURN * delta)
 		_sprite.flip_h = dir.x < 0.0
 	else:
-		rotation.y = lerp_angle(rotation.y, _leader.rotation.y, 6.0 * delta)
+		global_rotation.y = lerp_angle(global_rotation.y, leader_y, 6.0 * delta)
 		if _leader_sprite:
 			_sprite.flip_h = _leader_sprite.flip_h
 

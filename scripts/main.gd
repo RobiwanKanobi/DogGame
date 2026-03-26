@@ -1,6 +1,10 @@
 extends Node3D
 
 const DOG_TEXTURE_PATH := "res://assets/dog.png"
+const COMPANION_BREED_TEXTURE_PATHS: Array[String] = [
+	"res://assets/Cartoon Finnish Lapphund.png",
+	"res://assets/Happy Icelandic Sheepdog.png",
+]
 const COMPANION_DOG_SCRIPT := preload("res://scripts/companion_dog.gd")
 const RECRUIT_DISTANCE := 2.8
 const COMPANION_MIN_TREE_DIST := 4.5
@@ -44,11 +48,14 @@ const TREE_PHYSICS_LAYER := 2
 const TREE_CAPSULE_RADIUS := 3.6
 const TREE_CAPSULE_HEIGHT := 26.0
 const TREE_CAPSULE_CENTER_Y := 13.0
+const TREE_STUMP_RADIUS := 0.52
+const TREE_STUMP_HEIGHT := 0.28
+const TREE_STUMP_CENTER_Y := 0.14
 ## Same X as Tree_8 at (0,0,20); dog slightly toward camera so trunk sits between cam and dog.
 const DEBUG_OCCLUSION_TEST_POS := Vector3(0.0, 0.0, 17.35)
 const PUNCH_RADIUS_UV := 0.11
 
-@onready var dog_anchor: Node3D = $DogAnchor
+@onready var dog_anchor: CharacterBody3D = $DogAnchor
 @onready var dog_sprite: Sprite3D = $DogAnchor/DogSprite
 @onready var camera_rig: Node3D = $CameraRig
 @onready var follow_camera: Camera3D = $CameraRig/Camera3D
@@ -128,9 +135,13 @@ func _update_movement(delta: float) -> void:
 	else:
 		_velocity = _velocity.lerp(Vector3.ZERO, min(1.0, delta * 6.0))
 
-	dog_anchor.position += _velocity * delta
-	dog_anchor.position.x = clamp(dog_anchor.position.x, -WORLD_RADIUS, WORLD_RADIUS)
-	dog_anchor.position.z = clamp(dog_anchor.position.z, -WORLD_RADIUS, WORLD_RADIUS)
+	dog_anchor.velocity = Vector3(_velocity.x, 0.0, _velocity.z)
+	dog_anchor.move_and_slide()
+	_velocity = Vector3(dog_anchor.velocity.x, 0.0, dog_anchor.velocity.z)
+	var p := dog_anchor.position
+	p.x = clampf(p.x, -WORLD_RADIUS, WORLD_RADIUS)
+	p.z = clampf(p.z, -WORLD_RADIUS, WORLD_RADIUS)
+	dog_anchor.position = p
 
 
 func _update_camera(delta: float) -> void:
@@ -234,6 +245,18 @@ func _build_trees() -> void:
 		shape.shape = capsule
 		body.add_child(shape)
 
+		var stump := StaticBody3D.new()
+		stump.collision_layer = TREE_PHYSICS_LAYER
+		stump.collision_mask = 0
+		stump.position = Vector3(0.0, TREE_STUMP_CENTER_Y, 0.0)
+		tree_root.add_child(stump)
+		var stump_shape := CollisionShape3D.new()
+		var cyl := CylinderShape3D.new()
+		cyl.radius = TREE_STUMP_RADIUS
+		cyl.height = TREE_STUMP_HEIGHT
+		stump_shape.shape = cyl
+		stump.add_child(stump_shape)
+
 		var base := MeshInstance3D.new()
 		var cylinder := CylinderMesh.new()
 		cylinder.top_radius = 0.25
@@ -276,40 +299,11 @@ func _setup_dog() -> void:
 
 func _companion_texture_paths() -> Array[String]:
 	var out: Array[String] = []
-	for p: String in ["res://assets/dog2.png", "res://assets/dog3.png"]:
-		if ResourceLoader.exists(p) and not out.has(p):
+	for p in COMPANION_BREED_TEXTURE_PATHS:
+		if ResourceLoader.exists(p):
 			out.append(p)
-			if out.size() == 2:
-				return out.slice(0, 2)
-
-	var others: Array[String] = []
-	var d := DirAccess.open("res://assets")
-	if d:
-		d.list_dir_begin()
-		var fn := d.get_next()
-		while fn != "":
-			if not d.current_is_dir() and fn.ends_with(".png"):
-				var full := "res://assets/%s" % fn
-				if full == DOG_TEXTURE_PATH or full == TREE_TEXTURE_PATH:
-					fn = d.get_next()
-					continue
-				if out.has(full):
-					fn = d.get_next()
-					continue
-				if ResourceLoader.exists(full):
-					others.append(full)
-			fn = d.get_next()
-		d.list_dir_end()
-	others.sort()
-	for p in others:
-		if out.size() >= 2:
-			break
-		if not out.has(p):
-			out.append(p)
-
-	while out.size() < 2:
-		out.append(DOG_TEXTURE_PATH)
-
+		else:
+			out.append(DOG_TEXTURE_PATH)
 	return out.slice(0, 2)
 
 

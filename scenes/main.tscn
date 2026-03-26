@@ -1,11 +1,23 @@
-[gd_scene load_steps=2 format=3 uid="uid://bq3x7v2k4m1oe"]
+[gd_scene load_steps=3 format=3 uid="uid://bq3x7v2k4m1oe"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_a8xtq"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape_dog_base"]
+height = 0.65
+radius = 0.38
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_a8xtq")
 
-[node name="DogAnchor" type="Node3D" parent="."]
+[node name="DogAnchor" type="CharacterBody3D" parent="."]
+collision_layer = 1
+collision_mask = 2
+motion_mode = 1
+floor_stop_on_slope = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="DogAnchor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.325, 0)
+shape = SubResource("CylinderShape_dog_base")
 
 [node name="DogSprite" type="Sprite3D" parent="DogAnchor"]
 
