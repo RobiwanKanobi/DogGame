@@ -2,6 +2,10 @@ extends Node3D
 
 const DOG_TEXTURE_PATH := "res://assets/dog.svg"
 const TREE_TEXTURE_PATH := "res://assets/tree.svg"
+const ACTION_MOVE_LEFT := "move_left"
+const ACTION_MOVE_RIGHT := "move_right"
+const ACTION_MOVE_FORWARD := "move_forward"
+const ACTION_MOVE_BACK := "move_back"
 
 const MOVE_SPEED := 8.0
 const TURN_SPEED := 10.0
@@ -19,6 +23,7 @@ var _tree_texture: Texture2D
 
 
 func _ready() -> void:
+	_configure_input()
 	_dog_texture = load(DOG_TEXTURE_PATH) as Texture2D
 	_tree_texture = load(TREE_TEXTURE_PATH) as Texture2D
 	_build_ground()
@@ -36,14 +41,12 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_movement(delta: float) -> void:
-	var input_vector := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	input_vector += Vector2(
-		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
-		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
+	var input_vector := Input.get_vector(
+		ACTION_MOVE_LEFT,
+		ACTION_MOVE_RIGHT,
+		ACTION_MOVE_FORWARD,
+		ACTION_MOVE_BACK
 	)
-
-	if input_vector.length_squared() > 1.0:
-		input_vector = input_vector.normalized()
 
 	var move_direction := Vector3(input_vector.x, 0.0, input_vector.y)
 
@@ -175,3 +178,34 @@ func _make_cardboard_edge_material(color: Color) -> StandardMaterial3D:
 	material.roughness = 1.0
 	material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 	return material
+
+
+func _configure_input() -> void:
+	_add_key_binding(ACTION_MOVE_LEFT, [KEY_A, KEY_LEFT])
+	_add_key_binding(ACTION_MOVE_RIGHT, [KEY_D, KEY_RIGHT])
+	_add_key_binding(ACTION_MOVE_FORWARD, [KEY_W, KEY_UP])
+	_add_key_binding(ACTION_MOVE_BACK, [KEY_S, KEY_DOWN])
+
+
+func _add_key_binding(action_name: StringName, keycodes: Array[int]) -> void:
+	if not InputMap.has_action(action_name):
+		InputMap.add_action(action_name)
+
+	for keycode in keycodes:
+		if _action_has_key(action_name, keycode):
+			continue
+
+		var event := InputEventKey.new()
+		event.keycode = keycode
+		event.physical_keycode = keycode
+		InputMap.action_add_event(action_name, event)
+
+
+func _action_has_key(action_name: StringName, keycode: int) -> bool:
+	for event in InputMap.action_get_events(action_name):
+		if event is InputEventKey:
+			var key_event := event as InputEventKey
+			if key_event.keycode == keycode or key_event.physical_keycode == keycode:
+				return true
+
+	return false
