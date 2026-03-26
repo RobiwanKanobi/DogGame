@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+## On-screen D-pad + debug toggle. Do not use a full-screen IGNORE parent — it lets touches fall through to 3D on web.
+
 signal debug_menu_requested
 
 const MOVE_ACTIONS := {
@@ -9,18 +11,35 @@ const MOVE_ACTIONS := {
 	"right": &"move_right",
 }
 
+## touch index (mouse uses -1) -> action held by that pointer
+var _pointer_action: Dictionary = {}
+
 
 func _ready() -> void:
 	layer = 50
 	_build_ui()
 
 
-func _build_ui() -> void:
-	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if not st.pressed:
+			_release_pointer(st.index)
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			_release_pointer(-1)
 
+
+func _release_pointer(pointer_id: int) -> void:
+	if not _pointer_action.has(pointer_id):
+		return
+	var act: StringName = _pointer_action[pointer_id]
+	Input.action_release(act)
+	_pointer_action.erase(pointer_id)
+
+
+func _build_ui() -> void:
 	var pad := Control.new()
 	pad.name = "TouchPad"
 	pad.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -32,17 +51,17 @@ func _build_ui() -> void:
 	pad.offset_top = -200.0
 	pad.offset_right = 16.0 + 200.0
 	pad.offset_bottom = -16.0
-	pad.mouse_filter = Control.MOUSE_FILTER_STOP
-	root.add_child(pad)
+	pad.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(pad)
 
-	var btn_size := Vector2(68.0, 68.0)
+	var btn_size := Vector2(72.0, 72.0)
 	var cx := 100.0
 	var cy := 100.0
-	var step := 76.0
-	_add_dir_button(pad, "up", Vector2(cx, cy - step), btn_size)
-	_add_dir_button(pad, "down", Vector2(cx, cy + step), btn_size)
-	_add_dir_button(pad, "left", Vector2(cx - step, cy), btn_size)
-	_add_dir_button(pad, "right", Vector2(cx + step, cy), btn_size)
+	var step := 80.0
+	_add_dir_panel(pad, "up", Vector2(cx, cy - step), btn_size)
+	_add_dir_panel(pad, "down", Vector2(cx, cy + step), btn_size)
+	_add_dir_panel(pad, "left", Vector2(cx - step, cy), btn_size)
+	_add_dir_panel(pad, "right", Vector2(cx + step, cy), btn_size)
 
 	var dbg := Button.new()
 	dbg.name = "DebugButton"
@@ -59,21 +78,65 @@ func _build_ui() -> void:
 	dbg.offset_bottom = 52.0
 	dbg.mouse_filter = Control.MOUSE_FILTER_STOP
 	dbg.pressed.connect(func() -> void: debug_menu_requested.emit())
-	root.add_child(dbg)
+	add_child(dbg)
 
 
-func _add_dir_button(parent: Control, dir_key: String, pos: Vector2, size: Vector2) -> void:
-	var b := Button.new()
-	b.name = "Btn_%s" % dir_key
-	b.text = _arrow_label(dir_key)
-	b.focus_mode = Control.FOCUS_NONE
-	b.position = pos - size * 0.5
-	b.size = size
-	b.mouse_filter = Control.MOUSE_FILTER_STOP
+func _add_dir_panel(parent: Control, dir_key: String, center: Vector2, size: Vector2) -> void:
+	var p := Panel.new()
+	p.name = "Pad_%s" % dir_key
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.custom_minimum_size = size
+	p.position = center - size * 0.5
+	p.size = size
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1.0, 1.0, 1.0, 0.18)
+	sb.set_corner_radius_all(10)
+	p.add_theme_stylebox_override("panel", sb)
+
 	var action: StringName = MOVE_ACTIONS[dir_key]
-	b.button_down.connect(func() -> void: Input.action_press(action))
-	b.button_up.connect(func() -> void: Input.action_release(action))
-	parent.add_child(b)
+	var label := Label.new()
+	label.text = _arrow_label(dir_key)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(label)
+
+	p.gui_input.connect(func(ev: InputEvent) -> void: _on_pad_gui_input(ev, action, p))
+	parent.add_child(p)
+
+
+func _on_pad_gui_input(event: InputEvent, action: StringName, ctrl: Control) -> void:
+	var pointer_id := -1
+	var pressed := false
+
+	if event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		pointer_id = st.index
+		pressed = st.pressed
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		pointer_id = -1
+		pressed = mb.pressed
+	else:
+		return
+
+	if pressed:
+		# One pointer, one move action; release previous if re-pressing same finger elsewhere
+		if _pointer_action.has(pointer_id):
+			var prev: StringName = _pointer_action[pointer_id]
+			if prev != action:
+				Input.action_release(prev)
+		Input.action_press(action)
+		_pointer_action[pointer_id] = action
+	else:
+		if _pointer_action.get(pointer_id) == action:
+			Input.action_release(action)
+			_pointer_action.erase(pointer_id)
+
+	ctrl.accept_event()
 
 
 func _arrow_label(dir_key: String) -> String:
