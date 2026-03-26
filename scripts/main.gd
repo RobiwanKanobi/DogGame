@@ -22,9 +22,11 @@ const CENTER_LIGHT_ENERGY := 4.0
 const CENTER_LIGHT_RANGE := 45.0
 
 const TREE_PHYSICS_LAYER := 2
-const TREE_CAPSULE_RADIUS := 1.15
+const TREE_CAPSULE_RADIUS := 3.6
 const TREE_CAPSULE_HEIGHT := 26.0
 const TREE_CAPSULE_CENTER_Y := 13.0
+## Same X as Tree_8 at (0,0,20); dog slightly toward camera so trunk sits between cam and dog.
+const DEBUG_OCCLUSION_TEST_POS := Vector3(0.0, 0.0, 17.35)
 const PUNCH_RADIUS_UV := 0.11
 
 @onready var dog_anchor: Node3D = $DogAnchor
@@ -69,6 +71,9 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_TAB:
 			_debug_menu.toggle_visible()
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_F9:
+			_teleport_dog_for_occlusion_test()
 			get_viewport().set_input_as_handled()
 
 
@@ -152,8 +157,10 @@ func _update_occlusion_debug() -> void:
 
 	if _debug_xray and _dog_occluded:
 		dog_sprite.no_depth_test = true
+		dog_sprite.sorting_offset = 12.0
 	else:
 		dog_sprite.no_depth_test = false
+		dog_sprite.sorting_offset = 0.0
 
 	var show_outline: bool = _debug_outline and _dog_occluded and not (_debug_xray and _dog_occluded)
 	_dog_outline_sprite.visible = show_outline
@@ -252,8 +259,8 @@ func _setup_dog() -> void:
 	outline_mat.set_shader_parameter("albedo_tex", _dog_texture)
 	_dog_outline_sprite.material_override = outline_mat
 	_dog_outline_sprite.visible = false
+	_dog_outline_sprite.sorting_offset = 8.0
 	dog_anchor.add_child(_dog_outline_sprite)
-	dog_anchor.move_child(_dog_outline_sprite, 0)
 
 
 func _setup_camera() -> void:
@@ -353,6 +360,14 @@ func _sprite_world_half_height(texture: Texture2D, pixel_size: float) -> float:
 	if texture == null:
 		return 0.0
 	return float(texture.get_height()) * pixel_size * 0.5
+
+
+func _teleport_dog_for_occlusion_test() -> void:
+	dog_anchor.position = DEBUG_OCCLUSION_TEST_POS
+	_velocity = Vector3.ZERO
+	camera_rig.position = dog_anchor.position
+	dog_anchor.rotation.y = 0.0
+	dog_sprite.flip_h = false
 
 
 func _action_has_key(action_name: StringName, keycode: int) -> bool:
