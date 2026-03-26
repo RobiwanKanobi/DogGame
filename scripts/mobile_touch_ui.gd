@@ -47,17 +47,20 @@ func _build_ui() -> void:
 	pad.anchor_top = 1.0
 	pad.anchor_right = 0.0
 	pad.anchor_bottom = 1.0
-	pad.offset_left = 16.0
-	pad.offset_top = -200.0
-	pad.offset_right = 16.0 + 200.0
-	pad.offset_bottom = -16.0
+	var edge := 28.0
+	var pad_w := 480.0
+	var pad_h := 480.0
+	pad.offset_left = edge
+	pad.offset_top = -(edge + pad_h)
+	pad.offset_right = edge + pad_w
+	pad.offset_bottom = -edge
 	pad.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(pad)
 
-	var btn_size := Vector2(72.0, 72.0)
-	var cx := 100.0
-	var cy := 100.0
-	var step := 80.0
+	var btn_size := Vector2(144.0, 144.0)
+	var cx := pad_w * 0.5
+	var cy := pad_h * 0.5
+	var step := 160.0
 	_add_dir_panel(pad, "up", Vector2(cx, cy - step), btn_size)
 	_add_dir_panel(pad, "down", Vector2(cx, cy + step), btn_size)
 	_add_dir_panel(pad, "left", Vector2(cx - step, cy), btn_size)
@@ -72,10 +75,10 @@ func _build_ui() -> void:
 	dbg.anchor_top = 0.0
 	dbg.anchor_right = 1.0
 	dbg.anchor_bottom = 0.0
-	dbg.offset_left = -120.0
-	dbg.offset_top = 12.0
-	dbg.offset_right = -12.0
-	dbg.offset_bottom = 52.0
+	dbg.offset_left = -128.0
+	dbg.offset_top = edge
+	dbg.offset_right = -edge
+	dbg.offset_bottom = edge + 44.0
 	dbg.mouse_filter = Control.MOUSE_FILTER_STOP
 	dbg.pressed.connect(func() -> void: debug_menu_requested.emit())
 	add_child(dbg)
@@ -90,12 +93,13 @@ func _add_dir_panel(parent: Control, dir_key: String, center: Vector2, size: Vec
 	p.size = size
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(1.0, 1.0, 1.0, 0.18)
-	sb.set_corner_radius_all(10)
+	sb.set_corner_radius_all(18)
 	p.add_theme_stylebox_override("panel", sb)
 
 	var action: StringName = MOVE_ACTIONS[dir_key]
 	var label := Label.new()
 	label.text = _arrow_label(dir_key)
+	label.add_theme_font_size_override("font_size", 40)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.set_anchors_preset(Control.PRESET_FULL_RECT)
