@@ -37,6 +37,14 @@ func _physics_process(delta: float) -> void:
 
 func _update_movement(delta: float) -> void:
 	var input_vector := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	input_vector += Vector2(
+		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
+		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
+	)
+
+	if input_vector.length_squared() > 1.0:
+		input_vector = input_vector.normalized()
+
 	var move_direction := Vector3(input_vector.x, 0.0, input_vector.y)
 
 	if move_direction.length() > 0.0:
