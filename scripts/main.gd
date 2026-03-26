@@ -1,10 +1,6 @@
 extends Node3D
 
 const DOG_TEXTURE_PATH := "res://assets/dog.png"
-const COMPANION_TEXTURE_PATHS: Array[String] = [
-	"res://assets/dog2.png",
-	"res://assets/dog3.png",
-]
 const COMPANION_DOG_SCRIPT := preload("res://scripts/companion_dog.gd")
 const RECRUIT_DISTANCE := 2.8
 const COMPANION_MIN_TREE_DIST := 4.5
@@ -269,12 +265,51 @@ func _setup_dog() -> void:
 	dog_anchor.move_child(_dog_outline_sprite, 0)
 
 
+func _companion_texture_paths() -> Array[String]:
+	var out: Array[String] = []
+	for p: String in ["res://assets/dog2.png", "res://assets/dog3.png"]:
+		if ResourceLoader.exists(p) and not out.has(p):
+			out.append(p)
+			if out.size() == 2:
+				return out.slice(0, 2)
+
+	var others: Array[String] = []
+	var d := DirAccess.open("res://assets")
+	if d:
+		d.list_dir_begin()
+		var fn := d.get_next()
+		while fn != "":
+			if not d.current_is_dir() and fn.ends_with(".png"):
+				var full := "res://assets/%s" % fn
+				if full == DOG_TEXTURE_PATH or full == TREE_TEXTURE_PATH:
+					fn = d.get_next()
+					continue
+				if out.has(full):
+					fn = d.get_next()
+					continue
+				if ResourceLoader.exists(full):
+					others.append(full)
+			fn = d.get_next()
+		d.list_dir_end()
+	others.sort()
+	for p in others:
+		if out.size() >= 2:
+			break
+		if not out.has(p):
+			out.append(p)
+
+	while out.size() < 2:
+		out.append(DOG_TEXTURE_PATH)
+
+	return out.slice(0, 2)
+
+
 func _spawn_companion_dogs() -> void:
 	_companion_rng.randomize()
 	var spawn_points: Array[Vector3] = []
 	var next_slot := 0
 
-	for path in COMPANION_TEXTURE_PATHS:
+	for path in _companion_texture_paths():
 		var tex: Texture2D = null
 		if ResourceLoader.exists(path):
 			tex = load(path) as Texture2D
