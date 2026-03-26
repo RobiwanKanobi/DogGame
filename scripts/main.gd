@@ -1,7 +1,7 @@
 extends Node3D
 
-const DOG_TEXTURE_PATH := "res://assets/dog.svg"
-const TREE_TEXTURE_PATH := "res://assets/tree.svg"
+const DOG_TEXTURE_PATH := "res://assets/dog.png"
+const TREE_TEXTURE_PATH := "res://assets/tree.png"
 const ACTION_MOVE_LEFT := "move_left"
 const ACTION_MOVE_RIGHT := "move_right"
 const ACTION_MOVE_FORWARD := "move_forward"
