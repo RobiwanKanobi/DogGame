@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c6m0t0uchu1scn"]
+
+[ext_resource type="Script" path="res://scripts/mobile_touch_ui.gd" id="1_mob"]
+
+[node name="MobileTouchUI" type="CanvasLayer"]
+script = ExtResource("1_mob")

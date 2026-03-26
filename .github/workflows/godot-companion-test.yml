@@ -25,3 +25,6 @@ jobs:
 
       - name: Run companion behavior test
         run: godot-test --headless --path "${{ github.workspace }}" -s res://scripts/companion_behavior_test.gd
+
+      - name: Run mobile touch UI smoke test
+        run: godot-test --headless --path "${{ github.workspace }}" -s res://scripts/mobile_touch_smoke_test.gd

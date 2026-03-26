@@ -21,6 +21,7 @@ const TREE_WORLD_POSITIONS: Array[Vector3] = [
 ]
 const TREE_TEXTURE_PATH := "res://assets/tree.png"
 const DEBUG_MENU_SCENE := preload("res://scenes/debug_menu.tscn")
+const MOBILE_TOUCH_UI_SCENE := preload("res://scenes/mobile_touch_ui.tscn")
 const TREE_OCCLUSION_SHADER := preload("res://shaders/tree_occlusion_punch.gdshader")
 const DOG_OUTLINE_SHADER := preload("res://shaders/dog_occlusion_outline.gdshader")
 
@@ -85,6 +86,7 @@ func _ready() -> void:
 	_spawn_companion_dogs()
 	_setup_camera()
 	_setup_debug_menu()
+	_setup_mobile_touch_ui()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
@@ -428,6 +430,18 @@ func _setup_debug_menu() -> void:
 	_debug_menu.outline_toggled.connect(_on_debug_outline_toggled)
 	_debug_menu.xray_toggled.connect(_on_debug_xray_toggled)
 	_debug_menu.punch_toggled.connect(_on_debug_punch_toggled)
+
+
+func _setup_mobile_touch_ui() -> void:
+	var touch_ui: CanvasLayer = MOBILE_TOUCH_UI_SCENE.instantiate() as CanvasLayer
+	touch_ui.name = "MobileTouchUI"
+	add_child(touch_ui)
+	if touch_ui.has_signal("debug_menu_requested"):
+		touch_ui.debug_menu_requested.connect(_on_mobile_debug_pressed)
+
+
+func _on_mobile_debug_pressed() -> void:
+	_debug_menu.toggle_visible()
 
 
 func _on_debug_outline_toggled(on: bool) -> void:
